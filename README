@@ -1,93 +1,87 @@
-=====================================SERVER====================================
-(*) informatii generale: - o comanda primita de la un client TCP poate avea
-maxim 200 caractere.
-                         - o comanda primita de la un client TCP trebuie sa
-aibe argumentele separate prin spatii si nu poate sa aibe mai mult de 5 argumente
+============================== DESCRIPTION ================================
+(*) this project was done with the following goals in mind:
+	- better understand how TCP and UDP work.
+	- familiarize myself with the C socket API.
+	- understand how TCP/UDP connection multiplexation is done.
+	- familiarize myself with the way server-client applications work.
 
-                         - in momentul in care un client TCP se aboneaza la un
-topic el va ramane abonat la acel topic pana in momentul in care se dezaboneaza
-(ramane abonat chiar daca se deconecteaza si apoi se reconecteaza)
+(*) the project is represented by a server capable of multiplexing the
+incoming connections from multiple TCP and UDP clients. The main purpose
+of the server is to create a "link" between the TCP clients (known as
+subscribers in this case) which will subscribe to different topics in order
+to receive information and the UDP clients which give information related
+to different topics. As this project was part of a course assignment, the
+implementation of the UDP client will not be found in it because it was
+provided to us by the TA team.
+===========================================================================
 
+============================ SERVER DETAILS ===============================
+(*) all server-related files are found in the @serv directory.
 
-                         - daca un client TCP incearca sa se aboneze la un topic
-cu 2 valori diferite ale SF-ului atunci serverul o sa tina cont doar de prima
-abonare (pentru a schimba SF-ul clientul trebuie sa se dezaboneze mai intai)
+(*) a command received from a TCP client can only have 200 characters at
+most.
 
-                         - logica serverului este impartita in urmatoarele
-module: 1) connection - ofera o abstractizare a API-ului sys/socket pentru a-l
-putea folosi in partea de prelucrare de date si conexiune cu clientii
-        2) data - ofera functii pentru prelucrarea datelor de la nivelul
-aplicatiei
-        3) user - modul auxiliar ce ofera functii pentru modelarea clientilor
-TCP la nivelul aplicatiei
+(*) a command received from a TCP client needs to have its arguments
+separated by spaces and it cannot have more than 5 arguments.
 
-                               - pentru ca este posibil ca apelurile de sistem
-send si recv sa nu trimita exact numarul de octeti dati ca parametru am realizat
-2 wrappere: tcp_send si tcp_recv care transmit si primesc octeti pana numarul de
-octeti primit/trimis ajunge la cel asteptat
-                               - serverul nu verifica daca portul are un format
-invalid(daca @strtol nu seteaza errno sau nu intoarce o valoare negativa serverul
-va considera ca portul este valid)
+(*) when a TCP client subscribes to a topic, he will remain subscribed to
+that topic until he unsubscribes. (he will remain subscribed to the topic
+even if he disconnects and reconnects again to the server)
 
-(**) protocol nivel aplicatie: - serverul pune mesajele de la clientii UDP
-intr-un payload la care se adauga un "header" ce contine informatiile clientului
-UDP ce a transmis mesajul (structura de tip @sockaddr_in) (toate aceste informatii
-sunt tinute intr-o structura de tip messate)
-                               - serverul va transmite clientilor TCP exact
-sizeof(struct message) octeti
-                               - in momentul in care un client se deconecteaza
-acesta nu este sters din lista de clienti, ci marcat ca "inactiv"; daca un alt
-client cu alta adresa IP se conecteaza cu acelasi ID ca un client "inactiv" el
-va sterge entry-ul clientului "inactiv" din lista de clienti si il va adauga pe
-al lui
-                         - serverul se asteapta ca un client TCP sa trimita id-ul
-imediat dupa ce se realizeaza conexiunea
+(*) the server logic is divided in the following modules:
+	1) connection - offers an abstractization of the sys/soscket API
+			in order to be able to use it in the data
+			processing and client connection processes.
 
-                         - serverul se asteapta ca mesajul primit de la client
-ce contine ID-ul sau sa aiba exact 11 octeti
+	2) data - offers functions for data processing at the application
+		  layer.
 
-                                - daca un client este "inactiv" si primeste mesaje
-cu topicuri la care este abonat si are SF activat, serverul le va stoca in lista
-de mesaje netrimise si i le va trimite acestuia in momentul in care se reconecteaza
-===============================================================================
+	3) user - auxiliary module which offers function for client
+		  representation at the application layer.
 
+(*) since the @recv and @send syscalls may not send the number of bytes
+given as parameter, two wrappers were made: @tcp_send and @tcp_recv
+which send and receive bytes until the required number is reached.
 
-===============================CLIENT==========================================
-(*) informatii generale: - clientul nu verifica daca id-ul are mai mult de 11
-caractere, daca adresa ip a serverului are un format valid sau daca portul este
-invalid (atata timp cat apelurile de sistem nu returneaza vreo eroare clientul
-va considera ca toate sunt valide)
-                         - comanda data de user nu poate depasi 200 de caractere
-si nu poate avea mai mult de 5 argumente(separate prin spatiu)
+(*) the server doens't check if the given port has an invalid format.
+(unless @strtol doesn't set the errno value or doesn't return a
+negative value, the server will consider the port valid)
 
-(**) protocol nivel aplicatie: - clientul va transmite exact 11 octeti ce contin
-id-ul acestuia dupa realizarea conexiunii cu serverul
-                               - clientul se asteapta sa primeasca de la server
-exact sizeof(struct message) octeti in momentul in care acesta vrea sa-i transmita
-un mesaj de la un client UDP
-                               - pentru interpretarea datelor primite de la server,
-clientul va adauga un octet(terminatorul de sir) la bufferele pentru content si topic
-pentru a le putea afisa
-===============================================================================
+(*) application-layer protocol details:
+	(**) the server puts the messages it receives in a payload
+	to which a "header" which contains information related to
+	the UDP client which sent the message is appended.
+	
+	(**) the server will send to the TCP clients exactly
+	sizeof(struct message) byts.
 
-========================INFORMATII GENERALE APLICATIE==========================
-- am setat valoarea backlog-ului(in functia @listen) la 10, dar aplicatia ar 
-trebui sa mearga ok si pentru alte valori
+	(**) when a client disconnects, he is not deleted from the list of
+	clients, but marked as inactive. If another client with another IP
+	address tries to connect with the same ID as a client marked as
+	inactive, then the inactive client's entry will be deleted and
+	an entry for the new client will be added.
+	
+	(**) the server expects that the TCP client will immediatelly send
+	his ID after establishing the connection.
 
-(*) de ce goto-uri?
- - fac codul mai usor de urmarit atunci cand este vorba de error handling
- - prin folosirea lor se evita aparitia de mai multe ori a aceleiasi bucati
-de cod pentru eliberarea unor resurse
+	(**) the server expects that the message received from the client
+	which contains his ID to be exactly 11 bytes long.
+===========================================================================
 
-- am folosit goto-uri doar in functiile in care trebuia eliberata aceeasi resursa
-in mai multe parti in caz de eroare
+============================ CLIENT DETAILS ===============================
+(*) the client doesn't check if the ID is more than 11 characters long,
+the server IP address has a valid format or if the port is invalid (as
+long as the syscalls do not return an error, the client will consider
+all of them valid)
 
-(**) error handling
- - erorile se propaga pana in main unde se afiseaza mesajele corespunzatoare
-la stderr folosind @print_error (exceptie fac erorile care au trebuit tratate mai devreme
-de main; de regula ele au un comentariu care spune ca au fost "silenced")
+(*) the command given by the user can't be longer than 200 characters and
+can't have more than 5 arguments separated by spaces.
 
-- sursele pentru server se gasesc in @serv, cele pentru client in @cli, iar cele
-comune in radacina arhivei (sursele serverului si cele al clientului nu ar trebui
-scoase din fisierele cli si serv deoarece unele au aceeasi denumire) 
-==============================================================================
+(*) application-layer protocol details:
+	(**) the client will send exactly 11 bytes which contain its ID
+	after establishing the connection with the server
+	
+	(**) the client expects that the server will send exactly
+	sizeof(struct message) bytes when it wants to send him a meesage
+	from a UDP client.
+===========================================================================
